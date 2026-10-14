@@ -1,70 +1,46 @@
-\# CLN\_02\_RutaNorte\_Logistics
+# RutaNorte Logistics – Unidad 3: arquitectura y código base
 
+Continuación de la Unidad 2 (misma empresa y mismo alcance). Proceso modelado: de la cotización aceptada a la entrega.
 
+## Estructura
+```
+README.md
+pyproject.toml
+diagrams/
+  bpmn/01_bpmn_rutanorte.bpmn (+ .png)    BPMN 2.0 (IDs iguales a la matriz de la U2)
+  02_diagrama_clases.puml (+ .png)        dominio / aplicación / infraestructura
+  03a_secuencia_asignar_recursos.puml     CU-03 (+ .png)
+  03b_secuencia_registrar_entrega.puml    CU-04 (+ .png)
+docs/
+  casos_de_uso.md
+  04_matriz_trazabilidad.md
+  05_supuestos_pendientes.md   S-01 … S-05 (por validar con el stakeholder)
+  glosario_actualizado.md      lenguaje ubicuo: términos corregidos y nuevos
+  adr/ADR-001 … ADR-006
+src/rutanorte/
+  dominio/          Cotizacion, OrdenDeServicio, Unidad, Operador, eventos, servicio de dominio, interfaces de Repository
+  aplicacion/       commands/queries, handlers (Service Layer), puertos (IUnitOfWork, ...), DTO
+  infraestructura/  implementaciones en memoria
+  composicion.py    raíz de composición
+tests/              30 pruebas: casos de uso, dominio, transacción y supuestos
+```
 
-\*\*Curso:\*\* Componentes de Lógica de Negocio · \*\*Profesor:\*\* Miguel Ángel Gómez Marroquín
+## Ejecutar las pruebas
+```
+pip install pytest
+python -m pytest
+```
+Requiere Python 3.10 o superior.
 
-\*\*Actividad:\*\* Diseño arquitectural del sistema con IA (Unidad 3)
+## Generar los diagramas
+- `.puml`: pegar en https://www.plantuml.com/plantuml o usar la extensión PlantUML de VS Code.
+  Por consola: `java -DPLANTUML_LIMIT_SIZE=12000 -jar plantuml.jar -tpng diagrams/*.puml`
+- `.bpmn`: abrir en https://demo.bpmn.io, Camunda Modeler o Bizagi Modeler.
 
+## Convenciones
+Las clases usan los nombres del glosario en español. En el código los métodos van en `snake_case`
+(`registrar_entrega`) y en los diagramas en `camelCase` (`registrarEntrega`).
 
-
-\*\*Integrantes\*\*
-
-\- Ximena Montserrat Ovalle Vallejo – 1999238
-
-\- Santiago Almanza Moreno – 2001903
-
-\- Javier Hernández Huerta – 2089204
-
-
-
-\## Empresa y alcance
-
-RutaNorte Logistics (transporte terrestre de mercancía entre Monterrey, Saltillo, Reynosa, San Luis Potosí y Querétaro).
-
-Proceso modelado: de la cotización aceptada a la entrega. Continúa el caso de la Unidad 2 sin cambiar el alcance del BRD.
-
-
-
-\## Entregables
-
-| # | Entregable | Enlace |
-
-|---|---|---|
-
-| 01 | Informe de arquitectura (PDF) | \[docs/01\_informe\_arquitectura.pdf](docs/01\_informe\_arquitectura.pdf) |
-
-| 02 | Diagrama de dominio y clases | \[fuente .puml](diagrams/02\_diagrama\_clases.puml) · \[PNG](diagrams/02\_diagrama\_clases.png) |
-
-| 03 | Diagramas de secuencia | \[CU-03](diagrams/03a\_secuencia\_asignar\_recursos.puml) (\[PNG](diagrams/03a\_secuencia\_asignar\_recursos.png)) · \[CU-04](diagrams/03b\_secuencia\_registrar\_entrega.puml) (\[PNG](diagrams/03b\_secuencia\_registrar\_entrega.png)) |
-
-| 04 | Matriz de trazabilidad | \[docs/04\_matriz\_trazabilidad.md](docs/04\_matriz\_trazabilidad.md) |
-
-| 05 | Bitácora de IA | \[docs/05\_bitacora\_ia.md](docs/05\_bitacora\_ia.md) |
-
-| 06 | Código base | \[src/](src/) · \[tests/](tests/) |
-
-| 07 | Este repositorio | — |
-
-| 08 | Presentación | \[docs/08\_presentacion.pdf](docs/08\_presentacion.pdf) |
-
-
-
-\*\*Otros documentos:\*\* \[BPMN](diagrams/bpmn/01\_bpmn\_rutanorte.bpmn) · \[Casos de uso](docs/casos\_de\_uso.md) · \[Supuestos por validar](docs/05\_supuestos\_pendientes.md) · ADR: \[001](docs/adr/ADR-001-patron-de-logica-de-negocio.md), \[002](docs/adr/ADR-002-repository-y-unit-of-work.md), \[003](docs/adr/ADR-003-cqrs-basico.md), \[004](docs/adr/ADR-004-politica-de-capacidad-como-abstraccion.md), \[005](docs/adr/ADR-005-limite-del-agregado-orden-de-servicio.md), \[006](docs/adr/ADR-006-supuestos-pendientes-como-parametros.md)
-
-
-
-\## Cómo revisar
-
-1\. Leer el informe y la matriz de trazabilidad.
-
-2\. Abrir los diagramas: los `.puml` se pegan en [https://www.plantuml.com/plantuml](https://www.planttext.com/); el `.bpmn` se abre en https://demo.bpmn.io.
-
-3\. Ejecutar las pruebas (Python 3.10+): `pip install pytest` y luego `python -m pytest`.
-
-
-
-\## Estructura
-
-`diagrams/` fuentes y exportaciones · `docs/` informe, ADR, trazabilidad, bitácora · `src/` dominio, aplicación, infraestructura · `tests/`
-
+## Pendientes del BRD
+Los cinco puntos que el BRD no definió se resolvieron como **supuestos configurables, marcados «pendiente de validar»**
+(`docs/05_supuestos_pendientes.md`, ADR-006). La tecnología de persistencia sigue sin definirse (implementación en memoria).
