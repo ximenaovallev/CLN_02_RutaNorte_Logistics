@@ -58,7 +58,7 @@ Proceso modelado: de la cotización aceptada a la entrega. Continúa el caso de 
 
 1\. Leer el informe y la matriz de trazabilidad.
 
-2\. Abrir los diagramas: los `.puml` se pegan en https://www.plantuml.com/plantuml; el `.bpmn` se abre en https://demo.bpmn.io.
+2\. Abrir los diagramas: los `.puml` se pegan en [https://www.plantuml.com/plantuml](https://www.planttext.com/); el `.bpmn` se abre en https://demo.bpmn.io.
 
 3\. Ejecutar las pruebas (Python 3.10+): `pip install pytest` y luego `python -m pytest`.
 
