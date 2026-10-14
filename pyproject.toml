@@ -1,0 +1,9 @@
+[project]
+name = "rutanorte-logistics"
+version = "0.1.0"
+description = "Código base de arquitectura (Unidad 3) - RutaNorte Logistics"
+requires-python = ">=3.10"
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]

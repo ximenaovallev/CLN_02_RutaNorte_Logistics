@@ -1,0 +1,55 @@
+@startuml 03b_secuencia_registrar_entrega
+title CU-04 Registrar entrega o incidencia en destino (alternativas del flujo)
+skinparam shadowing false
+skinparam sequenceMessageAlign left
+autonumber
+
+actor "Operador" as Operador
+participant "RegistrarEntregaHandler\n<<Application Service>>" as H
+participant "IUnitOfWork" as UoW
+participant "IOrdenServicioRepository" as Ordenes
+participant "OrdenDeServicio\n<<Aggregate Root>>" as Orden
+participant "IPublicadorDeEventos" as Pub
+
+Operador -> H : handle(RegistrarEntregaCommand\n{ordenId, destinatario, evidencia, incidencia?})
+activate H
+H -> UoW : (inicia la transacción)
+H -> Ordenes : obtenerPorId(ordenId)
+Ordenes --> H : orden
+
+alt Entrega posible, completa y sin daño (sin incidencia)
+  H -> Orden : registrarEntrega(destinatario, evidencia)
+  alt Estado = LLEGADA_A_DESTINO
+    note right of Orden
+      estado -> ENTREGADO; asocia receptor y
+      evidencia; historial; evento EntregaRegistrada.
+    end note
+    Orden --> H : ok
+    H -> Ordenes : guardar(orden)
+    H -> UoW : confirmar()
+    H -> Pub : publicar(orden.extraerEventos())
+    H --> Operador : Resultado{exito = true}
+  else Estado distinto de LLEGADA_A_DESTINO
+    Orden --> H : error TransicionDeEstadoInvalida
+    H -> UoW : revertir()
+    H --> Operador : Resultado{exito = false, mensajeDeNegocio}
+  end
+else Destinatario ausente, dirección incorrecta,\nmercancía rechazada, entrega parcial o dañada
+  H -> Orden : registrarIncidencia(tipo, descripcion, evidencia)
+  note right of Orden
+    Crea la Incidencia con su evidencia, historial y
+    evento IncidenciaRegistrada. El estado NO cambia a
+    ENTREGADO: Operaciones decide el siguiente paso.
+  end note
+  Orden --> H : ok
+  H -> Ordenes : guardar(orden)
+  H -> UoW : confirmar()
+  H -> Pub : publicar(orden.extraerEventos())
+  note right of Pub
+    IncidenciaRegistrada queda disponible para Operaciones
+    y, vía consulta, para Atención al Cliente.
+  end note
+  H --> Operador : Resultado{exito = true}
+end
+deactivate H
+@enduml

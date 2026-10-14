@@ -1,0 +1,58 @@
+@startuml 03a_secuencia_asignar_recursos
+title CU-03 Asignar unidad y operador (flujo principal y regla "¿unidad adecuada y operador disponible?")
+skinparam shadowing false
+skinparam sequenceMessageAlign left
+autonumber
+
+actor "Operaciones" as Operaciones
+participant "AsignarRecursosHandler\n<<Application Service>>" as H
+participant "IUnitOfWork" as UoW
+participant "IOrdenServicioRepository" as Ordenes
+participant "IUnidadRepository" as Unidades
+participant "IOperadorRepository" as Operadores
+participant "AsignadorDeRecursos\n<<Domain Service>>" as Asig
+participant "PoliticaDeCapacidad" as Pol
+participant "OrdenDeServicio\n<<Aggregate Root>>" as Orden
+participant "IPublicadorDeEventos" as Pub
+
+Operaciones -> H : handle(AsignarRecursosCommand\n{ordenId, unidadId, operadorId})
+activate H
+H -> UoW : (inicia la transacción)
+H -> Ordenes : obtenerPorId(ordenId)
+Ordenes --> H : orden
+H -> Unidades : obtenerPorId(unidadId)
+Unidades --> H : unidad
+H -> Operadores : obtenerPorId(operadorId)
+Operadores --> H : operador
+H -> Asig : validarYCrear(orden, unidad, operador)
+activate Asig
+Asig -> Pol : permite(unidad, orden.mercancia)
+Pol --> Asig : adecuada (true/false)
+Asig -> Asig : operador.estaDisponible()
+
+alt Unidad adecuada y operador disponible
+  Asig --> H : Asignacion{unidadId, operadorId}
+  deactivate Asig
+  H -> Orden : asignarRecursos(asignacion)
+  note right of Orden
+    Regla del dominio: estado -> UNIDAD_ASIGNADA,
+    registra la asignación en el historial
+    (si ya existía, conserva el cambio) y
+    genera el evento RecursosAsignados.
+  end note
+  Orden --> H : ok
+  H -> Ordenes : guardar(orden)
+  H -> UoW : confirmar()
+  H -> Pub : publicar(orden.extraerEventos())
+  H --> Operaciones : Resultado{exito = true}
+else Unidad no adecuada u operador no disponible
+  Asig --> H : error RecursosNoDisponibles
+  H -> UoW : revertir()
+  H --> Operaciones : Resultado{exito = false,\n"Unidad no adecuada u operador no disponible"}
+  note over Operaciones, H
+    Operaciones busca otra unidad u operador
+    y repite el caso de uso (BPMN: buscar reemplazo).
+  end note
+end
+deactivate H
+@enduml

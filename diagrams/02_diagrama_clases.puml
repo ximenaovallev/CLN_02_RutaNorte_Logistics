@@ -1,0 +1,494 @@
+@startuml 02_diagrama_clases
+title RutaNorte Logistics - Diagrama de dominio y clases (proceso: de la cotización aceptada a la entrega)
+skinparam classAttributeIconSize 0
+skinparam nodesep 25
+skinparam ranksep 45
+skinparam packageStyle rectangle
+skinparam shadowing false
+skinparam class {
+  BackgroundColor White
+  ArrowColor #444444
+}
+skinparam package {
+  FontStyle bold
+}
+hide empty members
+left to right direction
+
+legend left
+  Azul = Dominio | Verde = Aplicación | Naranja = Infraestructura
+  <<S-01…S-05>> = supuestos del BRD pendientes de validar con el stakeholder
+  (docs/05_supuestos_pendientes.md). No son reglas confirmadas del negocio.
+endlegend
+
+' ===================== DOMINIO =====================
+package "DOMINIO" as Dominio #E8F1FB {
+
+  class Cotizacion <<Aggregate Root>> #D6E8FA {
+    - id : String
+    - clienteId : String
+    - solicitud : SolicitudDeCotizacion
+    - estado : EstadoCotizacion
+    + modificar(solicitud : SolicitudDeCotizacion) : void
+    + aceptar() : void
+    + rechazar() : void
+    + estaAceptada() : bool
+    + extraerEventos() : List<EventoDeDominio>
+  }
+  note right of Cotizacion
+    Invariante: solo se modifica
+    mientras está EN_PROCESO (US-03).
+  end note
+
+  class SolicitudDeCotizacion <<Value Object>> {
+    + origen : Ubicacion
+    + destino : Ubicacion
+    + mercancia : Mercancia
+    + fechaRequerida : date
+  }
+
+  class Mercancia <<Value Object>> {
+    + descripcion : String
+    + peso : Peso
+    + dimensiones : Dimensiones
+    + caracteristicasEspeciales : String
+    + altoValor : bool  <<S-02>>
+  }
+
+  class Ubicacion <<Value Object>> {
+    + ciudad : String
+    + direccion : String
+  }
+
+  enum EstadoCotizacion {
+    EN_PROCESO
+    ACEPTADA
+    RECHAZADA
+  }
+
+  class OrdenDeServicio <<Aggregate Root>> #D6E8FA {
+    - id : String
+    - cotizacionId : String
+    - clienteId : String
+    - origen : Ubicacion
+    - destino : Ubicacion
+    - mercancia : Mercancia
+    - ruta : String
+    - horarioRecoleccion : Horario
+    - estado : EstadoServicio
+    - asignacion : Asignacion
+    - historial : List<EntradaDeHistorial>
+    - incidencias : List<Incidencia>
+    - evidenciasRecepcion : List<Evidencia>
+    - evidenciasEntrega : List<Evidencia>
+    - destinatario : Destinatario
+    - fechaRequerida : date
+    - fechaEntrega : datetime
+    - altoValorAutorizado : bool  <<S-02>>
+    - cancelacion : Cancelacion  <<S-04>>
+    + {static} generarDesde(id, cotizacion : Cotizacion, ruta, horario : Horario) : OrdenDeServicio
+    + asignarRecursos(asignacion : Asignacion) : void
+    + registrarRecepcion(evidencia : Evidencia) : void
+    + iniciarTraslado() : void
+    + registrarLlegadaADestino() : void
+    + registrarEntrega(destinatario : Destinatario, evidencia : Evidencia) : void
+    + registrarIncidencia(tipo : TipoDeIncidencia, descripcion : String, evidencia : Evidencia) : void
+    + autorizarAltoValor(autorizadoPor : String) : void  <<S-02>>
+    + cancelar(solicitadoPor : String, motivo : String) : void  <<S-04>>
+    + evidencias(politica : PoliticaDeConservacion) : List<Evidencia>  <<S-03>>
+    + estadoActual() : EstadoServicio
+    + extraerEventos() : List<EventoDeDominio>
+  }
+  note bottom of OrdenDeServicio
+    Invariantes:
+    - Solo se genera desde una cotización ACEPTADA.
+    - Todo cambio de estado, asignación o incidencia
+      queda en el historial.
+    - registrarEntrega exige estado LLEGADA_A_DESTINO.
+    - Las evidencias quedan asociadas a la orden.
+    - Reasignar conserva el historial del cambio.
+  end note
+
+  enum EstadoServicio {
+    SOLICITADO
+    COTIZADO
+    CONFIRMADO
+    UNIDAD_ASIGNADA
+    RECOLECTADO
+    EN_TRANSITO
+    LLEGADA_A_DESTINO
+    ENTREGADO
+    CANCELADO  <<S-04>>
+  }
+
+  class Cancelacion <<Value Object>> {
+    + solicitadoPor : String
+    + motivo : String
+    + fecha : datetime
+  }
+
+  class PoliticaDeConservacion <<Value Object>> {
+    + dias : int [0..1]  <<S-03>>
+    + conserva(evidencia : Evidencia, hoy : datetime) : bool
+  }
+
+  class AutoridadDeCancelacion <<Domain Service>> {
+    + roles : Set<String>  <<S-04>>
+    + verificar(rol : String) : void
+  }
+
+  class Asignacion <<Value Object>> {
+    + unidadId : String
+    + operadorId : String
+  }
+
+  class EntradaDeHistorial <<Value Object>> {
+    + fecha : datetime
+    + descripcion : String
+    + estadoResultante : EstadoServicio
+    + registradoPor : String
+  }
+
+  class Incidencia <<Entity>> {
+    - id : int
+    + tipo : TipoDeIncidencia
+    + descripcion : String
+    + fechaRegistro : datetime
+    + evidencias : List<Evidencia>
+  }
+
+  enum TipoDeIncidencia {
+    UNIDAD_AVERIADA
+    RETRASO
+    MERCANCIA_DIFERENTE
+    MERCANCIA_RECHAZADA
+    DIRECCION_INCORRECTA
+    DESTINATARIO_AUSENTE
+    ENTREGA_PARCIAL
+    MERCANCIA_DANADA
+  }
+
+  class Evidencia <<Value Object>> {
+    + tipo : TipoDeEvidencia
+    + referencia : String
+    + fecha : datetime
+    + eventoAsociado : EventoAsociado
+  }
+
+  class Destinatario <<Value Object>> {
+    + identificacion : String
+  }
+
+  class Unidad <<Entity>> #D6E8FA {
+    - id : String
+    + tipo : String
+    + capacidad : Capacidad
+  }
+
+  class Capacidad <<Value Object>> {
+    + peso : Peso
+    + volumen : Volumen
+  }
+
+  class Peso <<Value Object>> {
+    + kilogramos : float
+  }
+  class Volumen <<Value Object>> {
+    + metrosCubicos : float
+  }
+  class Dimensiones <<Value Object>> {
+    + largo / ancho / alto (m)
+    + volumen() : Volumen
+  }
+  class Horario <<Value Object>> {
+    + inicio : datetime
+  }
+
+  class Operador <<Entity>> #D6E8FA {
+    - id : String
+    + nombre : String
+    + estaDisponible() : bool
+    + marcarDisponibilidad(disponible : bool) : void
+  }
+
+  class AsignadorDeRecursos <<Domain Service>> {
+    + validarYCrear(orden : OrdenDeServicio, unidad : Unidad, operador : Operador) : Asignacion
+  }
+
+  interface PoliticaDeCapacidad {
+    + permite(unidad : Unidad, mercancia : Mercancia) : bool
+  }
+  class PoliticaDeCapacidadEmpresa {
+    + permite(unidad : Unidad, mercancia : Mercancia) : bool
+  }
+  note bottom of PoliticaDeCapacidadEmpresa
+    SUPUESTO S-01 (por validar): solo aplica la capacidad
+    de la unidad; topes propios de la empresa = parámetros.
+  end note
+
+  class RecursosNoDisponibles <<Domain Error>>
+  class TransicionDeEstadoInvalida <<Domain Error>>
+  class CotizacionNoModificable <<Domain Error>>
+  class OrdenNoGenerable <<Domain Error>>
+  class SinAutoridadParaCancelar <<Domain Error>>
+  class ControlDeAltoValorPendiente <<Domain Error>>
+  class EntidadNoEncontrada <<Domain Error>>
+
+  abstract class EventoDeDominio <<Domain Event>> {
+    + ocurrioEn : datetime
+  }
+  class CotizacionAceptada <<Domain Event>> {
+    + cotizacionId : String
+  }
+  class OrdenDeServicioGenerada <<Domain Event>> {
+    + ordenId : String
+    + cotizacionId : String
+  }
+  class RecursosAsignados <<Domain Event>> {
+    + ordenId : String
+    + asignacion : Asignacion
+    + esReasignacion : bool
+  }
+  class ServicioCancelado <<Domain Event>> {
+    + ordenId : String
+    + solicitadoPor : String
+    + motivo : String
+  }
+  class CargaDeAltoValorAutorizada <<Domain Event>> {
+    + ordenId : String
+    + autorizadoPor : String
+  }
+  class EntregaRegistrada <<Domain Event>> {
+    + ordenId : String
+    + destinatario : Destinatario
+  }
+  class IncidenciaRegistrada <<Domain Event>> {
+    + ordenId : String
+    + tipo : TipoDeIncidencia
+  }
+
+  interface ICotizacionRepository {
+    + obtenerPorId(id : String) : Cotizacion
+    + guardar(cotizacion : Cotizacion) : void
+  }
+  interface IOrdenServicioRepository {
+    + obtenerPorId(id : String) : OrdenDeServicio
+    + guardar(orden : OrdenDeServicio) : void
+  }
+  interface IUnidadRepository {
+    + obtenerPorId(id : String) : Unidad
+  }
+  interface IOperadorRepository {
+    + obtenerPorId(id : String) : Operador
+  }
+}
+
+' ===================== APLICACIÓN =====================
+package "APLICACIÓN (Service Layer + CQRS)" as Aplicacion #E9F6E9 {
+
+  interface IUnitOfWork {
+    + cotizaciones : ICotizacionRepository
+    + ordenes : IOrdenServicioRepository
+    + unidades : IUnidadRepository
+    + operadores : IOperadorRepository
+    + confirmar() : void
+    + revertir() : void
+  }
+  interface IPublicadorDeEventos {
+    + publicar(eventos : List<EventoDeDominio>) : void
+  }
+  interface IConsultaDeServicios {
+    + estadoDelServicio(ordenId : String) : EstadoDelServicioDTO
+    + indicadores(desde : date, hasta : date) : IndicadoresDTO
+  }
+
+  class ResponderCotizacionCommand <<Command>> {
+    + cotizacionId
+    + respuesta : ACEPTA | RECHAZA
+  }
+  class GenerarOrdenDeServicioCommand <<Command>> {
+    + cotizacionId
+    + ruta
+    + horarioRecoleccion
+  }
+  class AsignarRecursosCommand <<Command>> {
+    + ordenId
+    + unidadId
+    + operadorId
+  }
+  class RegistrarEntregaCommand <<Command>> {
+    + ordenId
+    + destinatario : Destinatario [0..1]
+    + evidencia : Evidencia
+    + incidencia : TipoDeIncidencia [0..1]
+    + descripcionIncidencia : String
+  }
+  class AutorizarCargaDeAltoValorCommand <<Command>> {
+    + ordenId
+    + autorizadoPor
+  }
+  class CancelarServicioCommand <<Command>> {
+    + ordenId
+    + solicitadoPor
+    + motivo
+    + rolQueAutoriza
+  }
+  class ConsultarEstadoDelServicioQuery <<Query>> {
+    + ordenId
+  }
+  class ConsultarIndicadoresQuery <<Query>> {
+    + desde : date
+    + hasta : date
+  }
+
+  class ResponderCotizacionHandler <<Application Service>> {
+    + handle(cmd : ResponderCotizacionCommand) : Resultado
+  }
+  class GenerarOrdenDeServicioHandler <<Application Service>> {
+    + handle(cmd : GenerarOrdenDeServicioCommand) : Resultado
+  }
+  class AsignarRecursosHandler <<Application Service>> {
+    + handle(cmd : AsignarRecursosCommand) : Resultado
+  }
+  class RegistrarEntregaHandler <<Application Service>> {
+    + handle(cmd : RegistrarEntregaCommand) : Resultado
+  }
+  class AutorizarCargaDeAltoValorHandler <<Application Service>> {
+    + handle(cmd : AutorizarCargaDeAltoValorCommand) : Resultado
+  }
+  class CancelarServicioHandler <<Application Service>> {
+    + handle(cmd : CancelarServicioCommand) : Resultado
+  }
+  class ConsultarEstadoDelServicioHandler <<Query Handler>> {
+    + handle(q : ConsultarEstadoDelServicioQuery) : EstadoDelServicioDTO
+  }
+  class ConsultarIndicadoresHandler <<Query Handler>> {
+    + handle(q : ConsultarIndicadoresQuery) : IndicadoresDTO
+  }
+
+  class EstadoDelServicioDTO <<View Model>> {
+    + ordenId
+    + estadoActual : String
+    + eventos : List<String>
+    + retrasos : List<String>
+    + incidencias : List<String>
+  }
+  class IndicadoresDTO <<View Model>> {
+    + tiemposRealesDeEntregaHoras : List<float>
+    + retrasos : int
+    + incidencias : int
+    + entregasRealizadas : int
+    + ordenesEnElPeriodo : int
+    + entregasATiempo : int
+    + cumplimientoDeEntregas : float [0..1]  <<S-05>>
+  }
+  class Resultado {
+    + exito : bool
+    + mensajeDeNegocio : String
+    + datos : Map
+  }
+}
+
+' ===================== INFRAESTRUCTURA =====================
+package "INFRAESTRUCTURA" as Infra #FFF0DD {
+  class EnMemoriaUnitOfWork
+  class EnMemoriaCotizacionRepository
+  class EnMemoriaOrdenServicioRepository
+  class EnMemoriaUnidadRepository
+  class EnMemoriaOperadorRepository
+  class EnMemoriaConsultaDeServicios
+  class AlmacenEnMemoria
+  class PublicadorDeEventosEnMemoria
+}
+note bottom of Infra
+  Tecnología de base de datos NO definida en el BRD:
+  se implementa en memoria y es sustituible (ADR-002).
+end note
+
+' ---------- relaciones de dominio
+Cotizacion *-- SolicitudDeCotizacion
+SolicitudDeCotizacion *-- Mercancia
+SolicitudDeCotizacion *-- "2" Ubicacion
+Cotizacion --> EstadoCotizacion
+OrdenDeServicio *-- Asignacion
+OrdenDeServicio *-- "0..*" EntradaDeHistorial
+OrdenDeServicio *-- "0..*" Incidencia
+OrdenDeServicio --> EstadoServicio
+OrdenDeServicio *-- Mercancia
+OrdenDeServicio ..> Destinatario : entrega
+Incidencia --> TipoDeIncidencia
+Incidencia *-- "0..*" Evidencia
+OrdenDeServicio ..> Cotizacion : generarDesde
+Unidad *-- Capacidad
+Capacidad *-- Peso
+Capacidad *-- Volumen
+Mercancia *-- Peso
+Mercancia *-- Dimensiones
+OrdenDeServicio *-- Horario
+AsignadorDeRecursos ..> Unidad
+AsignadorDeRecursos ..> Operador
+AsignadorDeRecursos ..> OrdenDeServicio
+AsignadorDeRecursos --> PoliticaDeCapacidad
+AsignadorDeRecursos ..> RecursosNoDisponibles : lanza
+PoliticaDeCapacidad <|.. PoliticaDeCapacidadEmpresa
+OrdenDeServicio ..> TransicionDeEstadoInvalida : lanza
+Cotizacion ..> CotizacionNoModificable : lanza
+OrdenDeServicio ..> OrdenNoGenerable : lanza
+OrdenDeServicio ..> ControlDeAltoValorPendiente : lanza
+OrdenDeServicio *-- "0..1" Cancelacion
+OrdenDeServicio ..> PoliticaDeConservacion
+AutoridadDeCancelacion ..> SinAutoridadParaCancelar : lanza
+EventoDeDominio <|-- ServicioCancelado
+EventoDeDominio <|-- CargaDeAltoValorAutorizada
+EventoDeDominio <|-- CotizacionAceptada
+EventoDeDominio <|-- OrdenDeServicioGenerada
+EventoDeDominio <|-- RecursosAsignados
+EventoDeDominio <|-- EntregaRegistrada
+EventoDeDominio <|-- IncidenciaRegistrada
+IOrdenServicioRepository ..> OrdenDeServicio
+
+OrdenDeServicio ..> EventoDeDominio : genera eventos
+Cotizacion ..> EventoDeDominio : genera eventos
+' ---------- relaciones de aplicación
+IUnitOfWork o-- ICotizacionRepository
+IUnitOfWork o-- IOrdenServicioRepository
+IUnitOfWork o-- IUnidadRepository
+IUnitOfWork o-- IOperadorRepository
+AutorizarCargaDeAltoValorHandler ..> AutorizarCargaDeAltoValorCommand
+CancelarServicioHandler ..> CancelarServicioCommand
+AutorizarCargaDeAltoValorHandler --> IUnitOfWork
+CancelarServicioHandler --> IUnitOfWork
+AutorizarCargaDeAltoValorHandler --> IPublicadorDeEventos
+CancelarServicioHandler --> IPublicadorDeEventos
+CancelarServicioHandler --> AutoridadDeCancelacion
+ResponderCotizacionHandler ..> ResponderCotizacionCommand
+GenerarOrdenDeServicioHandler ..> GenerarOrdenDeServicioCommand
+AsignarRecursosHandler ..> AsignarRecursosCommand
+RegistrarEntregaHandler ..> RegistrarEntregaCommand
+ConsultarEstadoDelServicioHandler ..> ConsultarEstadoDelServicioQuery
+ConsultarIndicadoresHandler ..> ConsultarIndicadoresQuery
+ResponderCotizacionHandler --> IUnitOfWork
+GenerarOrdenDeServicioHandler --> IUnitOfWork
+AsignarRecursosHandler --> IUnitOfWork
+RegistrarEntregaHandler --> IUnitOfWork
+ResponderCotizacionHandler --> IPublicadorDeEventos
+GenerarOrdenDeServicioHandler --> IPublicadorDeEventos
+AsignarRecursosHandler --> IPublicadorDeEventos
+RegistrarEntregaHandler --> IPublicadorDeEventos
+AsignarRecursosHandler --> AsignadorDeRecursos
+ConsultarEstadoDelServicioHandler --> IConsultaDeServicios
+ConsultarIndicadoresHandler --> IConsultaDeServicios
+IConsultaDeServicios ..> EstadoDelServicioDTO
+IConsultaDeServicios ..> IndicadoresDTO
+
+' ---------- implementaciones de infraestructura
+IUnitOfWork <|.. EnMemoriaUnitOfWork
+ICotizacionRepository <|.. EnMemoriaCotizacionRepository
+IOrdenServicioRepository <|.. EnMemoriaOrdenServicioRepository
+IUnidadRepository <|.. EnMemoriaUnidadRepository
+IOperadorRepository <|.. EnMemoriaOperadorRepository
+IConsultaDeServicios <|.. EnMemoriaConsultaDeServicios
+IPublicadorDeEventos <|.. PublicadorDeEventosEnMemoria
+EnMemoriaUnitOfWork --> AlmacenEnMemoria
+EnMemoriaConsultaDeServicios --> AlmacenEnMemoria
+@enduml
